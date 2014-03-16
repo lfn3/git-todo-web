@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"path/filepath"
+	"io/ioutil"
 
 	"github.com/codegangsta/martini"
 	"github.com/libgit2/git2go"
@@ -28,37 +30,72 @@ func main() {
 
 	file.Close()
 
+	repos := make(map[string]*git.Repository, len(config.GitPaths))
+
+	for _, repoPath := range config.GitPaths {
+		repo, err := git.OpenRepository(repoPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		repos[filepath.Base(repoPath)] = repo
+	}
+
 	m := martini.Classic()
 
-	m.Get("/", func() string {
+	m.Get("/", func(router martini.Routes, logger *log.Logger) string {
 		output := "<h1> Todo files</h1>"
-		for _, repoPath := range config.GitPaths {
-			output += "<ul>"
-
-			repo, err := git.OpenRepository(repoPath)
-			if err != nil {
-				log.Fatal(err)
-			}
+		for repoName, repo := range repos {
+			output += "<h3> " + repoName + "</h3><ul>"
 
 			index, err := repo.Index()
 			if err != nil {
-				log.Fatal(err)
+				logger.Println(err)
 			}
 
 			for i := uint(0); i < index.EntryCount(); i++ {
 				indexEntry, err := index.EntryByIndex(i)
 				if err != nil {
-					log.Fatal(err)
+					logger.Println(err)
 				}
 
-				output += "<li>" + indexEntry.Path + "</li>"
+				output += "<li><a href=\"" + router.URLFor("file", repoName, indexEntry.Path) + "\"> " + indexEntry.Path + "</a></li>"
 			}
 
 			output += "</ul>"
 		}
 
 		return output
-	})
+	}).Name("index")
+
+	m.Get("/repo/:repoName/file/:fileName", func(params martini.Params, logger *log.Logger) string {
+		repo := repos[params["repoName"]]
+		//Might be faster to do some sort of filesystem based search?
+
+		index, err := repo.Index()
+		if err != nil {
+			logger.Println(err)
+		}
+
+		for i := uint(0); i < index.EntryCount(); i++ {
+			indexEntry, err := index.EntryByIndex(i)
+			if err != nil {
+				logger.Println(err)
+			}
+
+			if indexEntry.Path == params["fileName"] {
+				fileBytes, err := ioutil.ReadFile(filepath.Join(repo.Path(), "..", indexEntry.Path))
+				if err != nil {
+					logger.Println(err)
+				}
+
+				return string(fileBytes)
+ 			}
+
+		}
+		
+		return "File not found"
+
+	}).Name("file")
 
 	m.Run()
 }
