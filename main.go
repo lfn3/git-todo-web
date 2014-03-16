@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"io/ioutil"
 
 	"github.com/codegangsta/martini"
 	"github.com/libgit2/git2go"
@@ -47,18 +46,23 @@ func main() {
 		for repoName, repo := range repos {
 			output += "<h3> " + repoName + "</h3><ul>"
 
-			index, err := repo.Index()
+			branch, err := repo.LookupBranch("master", git.BranchLocal)
 			if err != nil {
 				logger.Println(err)
 			}
+			currentCommit, err := repo.LookupCommit(branch.Target())
+			if err != nil {
+				logger.Println(err)
+			}
+			currentTree, err := currentCommit.Tree()
 
-			for i := uint(0); i < index.EntryCount(); i++ {
-				indexEntry, err := index.EntryByIndex(i)
+			for i := uint64(0); i < currentTree.EntryCount(); i++ {
+				treeEntry := currentTree.EntryByIndex(i)
 				if err != nil {
 					logger.Println(err)
 				}
 
-				output += "<li><a href=\"" + router.URLFor("file", repoName, indexEntry.Path) + "\"> " + indexEntry.Path + "</a></li>"
+				output += "<li><a href=\"" + router.URLFor("file", repoName, treeEntry.Name) + "\"> " + treeEntry.Name + "</a></li>"
 			}
 
 			output += "</ul>"
@@ -69,26 +73,30 @@ func main() {
 
 	m.Get("/repo/:repoName/file/:fileName", func(params martini.Params, logger *log.Logger) string {
 		repo := repos[params["repoName"]]
-		//Might be faster to do some sort of filesystem based search?
 
-		index, err := repo.Index()
+		branch, err := repo.LookupBranch("master", git.BranchLocal)
 		if err != nil {
 			logger.Println(err)
 		}
+		currentCommit, err := repo.LookupCommit(branch.Target())
+		if err != nil {
+			logger.Println(err)
+		}
+		currentTree, err := currentCommit.Tree()
 
-		for i := uint(0); i < index.EntryCount(); i++ {
-			indexEntry, err := index.EntryByIndex(i)
+		for i := uint64(0); i < currentTree.EntryCount(); i++ {
+			treeEntry := currentTree.EntryByIndex(i)
 			if err != nil {
 				logger.Println(err)
 			}
 
-			if indexEntry.Path == params["fileName"] {
-				fileBytes, err := ioutil.ReadFile(filepath.Join(repo.Path(), "..", indexEntry.Path))
+			if treeEntry.Name == params["fileName"] {
+				blob, err := repo.LookupBlob(treeEntry.Id)
 				if err != nil {
 					logger.Println(err)
 				}
 
-				return string(fileBytes)
+				return string(blob.Contents())
  			}
 
 		}
