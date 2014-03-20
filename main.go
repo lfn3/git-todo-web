@@ -8,10 +8,29 @@ import (
 
 	"github.com/codegangsta/martini"
 	"github.com/libgit2/git2go"
+	"github.com/martini-contrib/render"
 )
 
 type Config struct {
 	GitPaths []string
+}
+
+type TemplateModel struct {
+	Route martini.Routes
+}
+
+type RenderableRepoList struct {
+	TemplateModel
+	Repos []RenderableRepo
+}
+
+type RenderableRepo struct {
+	RepoName string
+	Files    []TrackedFile
+}
+
+type TrackedFile struct {
+	fileName string
 }
 
 func main() {
@@ -41,10 +60,12 @@ func main() {
 
 	m := martini.Classic()
 
-	m.Get("/", func(router martini.Routes, logger *log.Logger) string {
-		output := "<h1> Todo files</h1>"
+	m.Use(render.Renderer())
+
+	m.Get("/", func(router martini.Routes, logger *log.Logger, r render.Render) {
+		model := RenderableRepoList{route: router}
 		for repoName, repo := range repos {
-			output += "<h3> " + repoName + "</h3><ul>"
+			rRepo := RenderableRepo{repoName: repoName}
 
 			branch, err := repo.LookupBranch("master", git.BranchLocal)
 			if err != nil {
@@ -55,7 +76,7 @@ func main() {
 				logger.Println(err)
 			}
 			currentTree, err := currentCommit.Tree()
-
+			rRepo.Files :=
 			for i := uint64(0); i < currentTree.EntryCount(); i++ {
 				treeEntry := currentTree.EntryByIndex(i)
 				if err != nil {
@@ -68,7 +89,7 @@ func main() {
 			output += "</ul>"
 		}
 
-		return output
+		r.HTML(200, "fileList", RenderableRepoList)
 	}).Name("index")
 
 	m.Get("/repo/:repoName/file/:fileName", func(params martini.Params, logger *log.Logger) string {
@@ -97,10 +118,10 @@ func main() {
 				}
 
 				return string(blob.Contents())
- 			}
+			}
 
 		}
-		
+
 		return "File not found"
 
 	}).Name("file")
