@@ -1,0 +1,13 @@
+{{ $route := .TemplateModel.Route }}
+
+<h1>File list</h1>
+
+{{range .Repos}}
+	<h4>{{.RepoName}}</h4>
+	<ul>
+		{{ $repoName := .RepoName }}
+		{{range .Files}}
+			<li><a href="{{ $route.URLFor "file" $repoName .FileName }} ">{{.FileName}}</li>
+		{{end}}
+	</ul>
+{{end}}
