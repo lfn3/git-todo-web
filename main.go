@@ -62,7 +62,7 @@ func main() {
 		AllowHeaders: []string{"Origin"},
 	}))
 
-	m.Get("/", func(logger *log.Logger, r render.Render) {
+	m.Get("/repo", func(logger *log.Logger, r render.Render) {
 		model := make([]RenderableRepo, len(repos))
 		i := 0
 		for repoName, repo := range repos {
