@@ -8,6 +8,7 @@ import (
 
 	"github.com/codegangsta/martini"
 	"github.com/libgit2/git2go"
+	"github.com/martini-contrib/cors"
 	"github.com/martini-contrib/render"
 )
 
@@ -15,12 +16,7 @@ type Config struct {
 	GitPaths []string
 }
 
-type TemplateModel struct {
-	Route martini.Routes
-}
-
 type RenderableRepoList struct {
-	TemplateModel
 	Repos []RenderableRepo
 }
 
@@ -61,12 +57,14 @@ func main() {
 	m := martini.Classic()
 
 	m.Use(render.Renderer())
+	m.Use(cors.Allow(&cors.Options{
+		AllowOrigins: []string{"http://localhost:8000"},
+		AllowHeaders: []string{"Origin"},
+	}))
 
-	m.Get("/", func(router martini.Routes, logger *log.Logger, r render.Render) {
-		model := RenderableRepoList{
-			Repos: make([]RenderableRepo, len(repos)),
-			TemplateModel: TemplateModel{ Route: router },
-		}
+	m.Get("/", func(logger *log.Logger, r render.Render) {
+		model := make([]RenderableRepo, len(repos))
+		i := 0
 		for repoName, repo := range repos {
 			rRepo := RenderableRepo{RepoName: repoName}
 
@@ -86,13 +84,14 @@ func main() {
 					logger.Println(err)
 				}
 
-				rRepo.Files = append(rRepo.Files, TrackedFile{FileName: treeEntry.Name})
+				rRepo.Files[i] = TrackedFile{FileName: treeEntry.Name}
 			}
 
-			model.Repos = append(model.Repos, rRepo)
+			model[i] = rRepo
+			i++
 		}
 
-		r.HTML(200, "fileList", model)
+		r.JSON(200, model)
 	}).Name("index")
 
 	m.Get("/repo/:repoName/file/:fileName", func(params martini.Params, logger *log.Logger) string {
