@@ -131,8 +131,61 @@ func main() {
 		}
 
 		return "File not found"
-
 	}).Name("file")
+
+	m.Get("/repo/:repoName/file/:fileName/history", func(params martini.Params, logger *log.Logger, r render.Render){
+		repo := repos[params["repoName"]]
+
+		branch, err := repo.LookupBranch("master", git.BranchLocal)
+		if err != nil {
+			logger.Println(err)
+		}
+		currentCommit, err := repo.LookupCommit(branch.Target())
+		if err != nil {
+			logger.Println(err)
+		}
+
+		var output = []string{}
+		found := false
+
+		for i := uint(0); i < currentCommit.ParentCount(); i++ {
+			parentCommit := currentCommit.Parent(i)
+			currentTree, err := parentCommit.Tree()
+			if err != nil {
+				logger.Println(err)
+				continue
+			}
+
+			for j := uint64(0); j < currentTree.EntryCount(); j++ {
+				treeEntry := currentTree.EntryByIndex(j)
+				if err != nil {
+					logger.Println(err)
+				}
+
+				if treeEntry.Name == params["fileName"] {
+					blob, err := repo.LookupBlob(treeEntry.Id)
+					if err != nil {
+						logger.Println(err)
+					}
+
+					if strings.HasSuffix(treeEntry.Name, ".md") {
+						output = append(output, string(blackfriday.MarkdownCommon(blob.Contents())))
+					} else {
+						output = append(output, string(blob.Contents()))
+					}
+					found = true
+					break
+				}
+			}
+
+			if found {
+				i = 0
+				currentCommit = parentCommit
+			}
+		}
+
+		r.JSON(200, output)
+	}).Name("fileHistory")
 
 	m.Run()
 }
