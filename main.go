@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/codegangsta/martini"
 	"github.com/libgit2/git2go"
@@ -29,6 +30,12 @@ type RenderableRepo struct {
 
 type TrackedFile struct {
 	FileName string
+}
+
+type Commit struct {
+	Sha string
+	Comment string
+	Date time.Time
 }
 
 func main() {
@@ -145,10 +152,11 @@ func main() {
 			logger.Println(err)
 		}
 
-		var output = []string{}
-		found := false
-
-		for i := uint(0); i < currentCommit.ParentCount(); i++ {
+		var output = make([][]Commit, 0)
+		blobIdsCheck := make(map[git.Oid]bool, 10)
+		i := uint(0)
+		for i < currentCommit.ParentCount() {
+			found := false
 			parentCommit := currentCommit.Parent(i)
 			currentTree, err := parentCommit.Tree()
 			if err != nil {
@@ -163,23 +171,35 @@ func main() {
 				}
 
 				if treeEntry.Name == params["fileName"] {
-					blob, err := repo.LookupBlob(treeEntry.Id)
-					if err != nil {
-						logger.Println(err)
+					ok := blobIdsCheck[*treeEntry.Id]
+					if ok == false {
+						blobIdsCheck[*treeEntry.Id] = true
+						if found == false {
+							output = append(output, []Commit{Commit{
+								Sha: parentCommit.Id().String(),
+								Comment: parentCommit.Message(),
+								Date: parentCommit.Committer().When,
+								}})
+							found = true
+						} else {
+							target := output[len(output) - 1]
+							target = append(target, Commit{
+								Sha: parentCommit.Id().String(),
+								Comment: parentCommit.Message(),
+								Date: parentCommit.Committer().When,
+								})
+							output[len(output) - 1] = target
+						}
 					}
 
-					if strings.HasSuffix(treeEntry.Name, ".md") {
-						output = append(output, string(blackfriday.MarkdownCommon(blob.Contents())))
-					} else {
-						output = append(output, string(blob.Contents()))
-					}
-					found = true
 					break
 				}
 			}
 
-			if found {
-				i = 0
+			i++
+
+			if currentCommit.ParentCount() == i {
+				i = uint(0)
 				currentCommit = parentCommit
 			}
 		}
