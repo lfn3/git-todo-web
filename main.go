@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/codegangsta/martini"
+	"github.com/go-martini/martini"
 	"github.com/libgit2/git2go"
 	"github.com/martini-contrib/cors"
 	"github.com/martini-contrib/render"
@@ -139,6 +139,41 @@ func main() {
 
 		return "File not found"
 	}).Name("file")
+
+	m.Get("/repo/:repoName/commit/:commitSha/file/:fileName", func(params martini.Params, logger *log.Logger) string {
+		repo := repos[params["repoName"]]
+		commitId, err := git.NewOid(params["commitSha"])
+		if err != nil {
+			logger.Println(err)
+		}
+
+		commit, err := repo.LookupCommit(commitId)
+
+		tree, err := commit.Tree()
+
+		for i := uint64(0); i < tree.EntryCount(); i++ {
+			treeEntry := tree.EntryByIndex(i)
+			if err != nil {
+				logger.Println(err)
+			}
+
+			if treeEntry.Name == params["fileName"] {
+				blob, err := repo.LookupBlob(treeEntry.Id)
+				if err != nil {
+					logger.Println(err)
+				}
+
+				if strings.HasSuffix(treeEntry.Name, ".md") {
+					return string(blackfriday.MarkdownCommon(blob.Contents()))
+				}
+
+				return string(blob.Contents())
+			}
+
+		}
+
+		return "File not found"
+	})
 
 	m.Get("/repo/:repoName/file/:fileName/history", func(params martini.Params, logger *log.Logger, r render.Render){
 		repo := repos[params["repoName"]]
