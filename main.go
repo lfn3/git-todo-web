@@ -5,14 +5,12 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/go-martini/martini"
 	"github.com/libgit2/git2go"
 	"github.com/martini-contrib/cors"
 	"github.com/martini-contrib/render"
-	"github.com/russross/blackfriday"
 )
 
 type Config struct {
@@ -128,10 +126,6 @@ func main() {
 					logger.Println(err)
 				}
 
-				if strings.HasSuffix(treeEntry.Name, ".md") {
-					return string(blackfriday.MarkdownCommon(blob.Contents()))
-				}
-
 				return string(blob.Contents())
 			}
 
@@ -161,10 +155,6 @@ func main() {
 				blob, err := repo.LookupBlob(treeEntry.Id)
 				if err != nil {
 					logger.Println(err)
-				}
-
-				if strings.HasSuffix(treeEntry.Name, ".md") {
-					return string(blackfriday.MarkdownCommon(blob.Contents()))
 				}
 
 				return string(blob.Contents())
